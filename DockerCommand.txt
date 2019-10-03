@@ -1,0 +1,164 @@
+docker save cnetos > /opt/centos.tar.gz
+docker load < /opt/centos.tar.gz
+docker load --input /opt/centos.tar.gz
+docker pull  ngnix
+docker images
+docker run centos /bin/echo "hehe"
+docker ps / docker ps -a
+docker run --name mydocker -t -i centos /bin/bash 
+#what is -t -i
+docker run --name <name> -h <hostname>
+docker stop <Container ID>
+docker ps -a -l #查看容器
+docker exec|dcoker attach #进入容器 多次执行这个命令的进入的是同一个，是同步的。而且退出bash 容器会exit
+nsenter  #安装 util-linux# 进入进程的命名空间
+<PID> = docker inspect --format "{{State.Pid}} <container_id>
+nsenter -t <PID> -u -i -n -p
+#必须知道进程的pid
+#1.检测本地是否存在 centos
+#2.利用centos镜像启动容器
+docker search # 搜索镜像
+docker pull # 获取镜像
+docker images# 查看镜像
+docker rmi <image_id> # image_id not create container
+docker run --help
+docker rm #删除contaier
+docker logs <ngnix_container_id>
+随机映射端口，自动指定
+docker run -P  ngnix
+docker run -p <hostPort>:<containerPort>  ngnix
+docker run -p <ip>:<hostPort>:<containerPort> ngnix
+docker run -p <ip>::<containerPort> ngnix
+docker run -p <hostPort>:<containerPort> ngnix
+docker run -p <hostPort>:<containerPort>:<udp> ngnix
+docker 的数据存储
+数据卷
+-v /data
+-v src:dst
+数据卷容器
+--volumes-from
+docker run -it --name volume-test1 -v /data centos
+#查看docker 内 /data 在VM上的位置
+docker inspect <container_id>
+docker run -it -v /opt:/opt centos
+挂载单个文件到容器内
+docker run -it -v  ~/.bash_history:/.bash_history centos
+#创建一个可以共享的目录
+docker run --name nfs -v /data centos
+docker run -it --name test1 --volumes-from nfs centos  #nfs 容器里面的卷
+做自己的镜像
+docker run --name mynginx -it centos #使用 centos 镜像新建一个contianer
+      yum install -y nginx  # 进入 container 内安装 nginx
+docker commit -m "my nginx" <container_id> qifei/mynginx:v1  #保存container 镜像
+docker run -it --name nginxv1 qifei/mynginx:v1
+     vim  /etc/nginx/nginx.conf
+        ademon off;
+docker commit -m "my nginx" <container_id> qifei/mynginx:v2 #成为镜像
+docker run -d -p 82:80 qifei/mynginx:v2 nginx #nginx 是命令
+把docker 内的 /data 目录 作为 nfs
+docker run  -d  --name nfs -v /data  centos
+使用 centos 容器内的 /data 目录作为 nfs 
+docker run -it --name  test1 --volumes-from nfs centos
+Dockerfile 构建
+    docker build  Dockerfile 纯文本文件
+    
+    如何编写 Dockerfile
+    基础镜像信息
+    维护者信息
+    镜像的操作指令
+    容器启动时执行指令
+    
+# This is docker file
+# VERSION 1
+# Author: qifei
+# Base image
+FROM centos
+#Maintainer
+MAINTAINER  qifei qifei.liu@citrix.com
+#Commands
+RUN rpm -ivh   xxxxx
+RUN yum install -y nginx
+ADD index.html /usr/share/nginx/html/index.html
+# ADD zip 文件会自动解压
+RUN echo "daemon off;" >> /etc/nginx/nginx.conf
+WORKDIR  # cd 的意思
+EXPOSE 80
+CMD ["nginx"]
+#############################################
+mkdir /opt/dockerfile/
+docker build -t qiei/mynginx:v3 Dockerfile nginx
+构建| 运输| 运行
+docker 构建私有仓库
+docker registry   --> gitlab
+docker tag qifei/mynginx:v3 x.x.x.x:<port>/qifei/mynginx:latest
+docker push x.x.x.x:<port>/qifei/mynginx:latest
+DockerHub  -> github
+Docker registry  -> gitlab
+docker run -d -p 5000:5000 registery
+需要 配置https
+配置 Nginx。用户认证 https
+[root@docker01 ssl]# cd /etc/pki/CA/
+[root@docker01 CA]# touch ./{serial,index.txt}
+[root@docker01 CA]# echo "00" > serial
+[root@docker01 CA]# openssl genrsa -out private/cakey.pem 2048
+Generating RSA private key, 2048 bit long modulus
+.........................+++
+....................+++
+e is 65537 (0x10001)
+openssl req -new -x509 -key  private/cakey.pem -days 3650 -out cacert.pem
+cd /etc/ssl
+openssl genrsa -out nginx.key 2048
+
+
+[root@docker01 ssl]# openssl req -new -key nginx.key -out nginx.csr
+You are about to be asked to enter information that will be incorporated
+into your certificate request.
+What you are about to enter is what is called a Distinguished Name or a DN.
+There are quite a few fields but you can leave some blank
+For some fields there will be a default value,
+If you enter '.', the field will be left blank.
+-----
+Country Name (2 letter code) [XX]:US
+State or Province Name (full name) []:
+Locality Name (eg, city) [Default City]:
+Organization Name (eg, company) [Default Company Ltd]:qifei
+Organizational Unit Name (eg, section) []:
+Common Name (eg, your name or your server's hostname) []:registry.oldboyedu.com
+Email Address []:admin@oldboyedu.com
+
+Please enter the following 'extra' attributes
+to be sent with your certificate request
+A challenge password []:citrix
+An optional company name []:qifei
+
+签发证书：
+openssl ca -in nginx.csr -days 3650 -out  nginx.crt
+
+
+cat /etc/pki/CA/cacert.pem >> /etc/pki/tls/certs/ca-bundle.crt
+设置登陆用户名密码:
+ htpasswd  -c /etc/nginx/conf.d/docker-registry.htpasswd oldboy
+ 启动 nginx 服务器
+ systemctl start nginx
+ 登陆
+ docker login -u oldboy -p citrix -e admin@oldboyedu.com
+
+ 
+ 
+ 
+ VM LXC 容器 linux kernel namespace
+ Pid(进程) net(网络) ipc() mnt uts user
+ docker 启动 资源限制  
+ shipyard 
+ vim  /etc/sysconfig/docker
+ OPTIONS='--selinux-enabled --insecure-registry x.x.x.x:<5000> -H tcp://0.0.0.0:235 -H unix://var/run/docker.sock'
+ systemctl restart docker
+ curl -s http://192.168.56.11:235/info  | python -mjson.tool
+ 
+ 生产环境 docker
+ 1.规划
+ 2.基础镜像  centos
+ centos/Dockefile  epel.repo
+ web/Dockerfile  supervisord.conf ADD进去 id_ras nginx.conf  redis.conf 
+ api-superisor.ini
+ 
